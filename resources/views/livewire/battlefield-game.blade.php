@@ -2,7 +2,8 @@
     <h3>Player vs Bot Ticket Tower</h3>
 
     <div class="mb-2">
-        Tickets: {{ $tickets }} | Round: {{ $roundsPlayed }}/20
+        Tickets: {{ $tickets }} | Round: {{ $roundsPlayed }}/20 | Score: You {{ $userScore }} - Bot
+        {{ $botScore }}
     </div>
     <div class="mb-2">
         Turn: <strong>{{ strtoupper($activePlayer) }}</strong>
@@ -29,7 +30,7 @@
                         @endphp
                         <button class="tile {{ $tile == 'ticket' ? 'correct' : ($tile == 'empty' ? 'wrong' : '') }}"
                             wire:click="revealTile({{ $tileIndex }})"
-                            {{ $revealed || $activePlayer != 'user' ? 'disabled' : '' }}>
+                            {{ $revealed || $activePlayer != 'user' || !$gameActive ? 'disabled' : '' }}>
                             <i class="fa-solid fa-ticket"></i>
                         </button>
                     @endforeach
@@ -72,9 +73,7 @@
         Livewire.on('play-sound', ({
             sound
         }) => {
-            const audio = document.getElementById($ {
-                sound
-            } - sound);
+            const audio = document.getElementById(`${sound}-sound`);
             if (audio) {
                 audio.currentTime = 0;
                 audio.play().catch(() => {});

@@ -75,11 +75,13 @@ class BattlefieldGame extends Component
             $this->processTurn($picked, 'bot');
 
             // Break if the bot hits a wrong tile
-            if ($picked !== $correctIndex) break;
+            if ($this->botTiles[$picked] === 'empty') {
+                break;
+            }
         }
 
-        // End the round if bot makes a mistake
-        if ($this->roundsPlayed < 20) {
+        // Only increment rounds and reset if the bot didn't complete the tower
+        if ($this->botCurrentRow >= 0 && $this->roundsPlayed < 20) {
             $this->roundsPlayed++;
             $this->resetPlayerTower('user');
             $this->activePlayer = 'user';
