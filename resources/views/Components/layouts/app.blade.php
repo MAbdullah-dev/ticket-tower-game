@@ -12,6 +12,7 @@
         integrity="sha512-Evv84Mr4kqVGRNSgIGL/F/aIDqQb7xQ2vcrdIwxfjThSH8CSR7PBEakCr51Ck+w+/U6swU2Im1vVX0SVk9ABhg=="
         crossorigin="anonymous" referrerpolicy="no-referrer" />
     {{-- <script src="{{ asset('assets/js/jqery_min.js') }}"></script> --}}
+    @livewireScripts
     @livewireStyles
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 
@@ -23,7 +24,6 @@
     <main>
         {{ $slot }}
     </main>
-    @livewireScripts
     @stack('js')
     <script></script>
     <script script src="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js" defer></script>

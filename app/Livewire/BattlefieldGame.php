@@ -3,146 +3,189 @@
 namespace App\Livewire;
 
 use Livewire\Component;
+use Illuminate\Support\Facades\Log;
 
 class BattlefieldGame extends Component
 {
+    public $gameStarted = false;
     public $tickets = 100;
-    public $userTiles = [];
-    public $botTiles = [];
-    public $userCorrectTiles = [];
-    public $botCorrectTiles = [];
-    public $userRevealed = [];
-    public $botRevealed = [];
-    public $userCurrentRow = 4;
-    public $botCurrentRow = 4;
+    public $currentRound = 1;
     public $userScore = 0;
     public $botScore = 0;
-    public $activePlayer = 'user';
-    public $roundsPlayed = 0;
-    public $gameActive = false;
-    public $winner = null;
+    public $userTower = [];
+    public $botTower = [];
+    public $userCurrentRow = 0;
+    public $botCurrentRow = 0;
+    public $turn = 'user';
+    public $firstPlayer = 'user';
+    public $playersTurnsTaken = [];
+    public $progress = [];
+    public $gameWinner = null;
+
+    protected $listeners = ['botTurn' => 'handleBotTurn'];
 
     public function mount()
     {
-        $this->startNewGame();
+        $this->tickets = 100;
+        Log::debug('Game mounted with initial tickets: ' . $this->tickets);
     }
 
-    public function startNewGame()
+    public function startGame()
     {
+        Log::debug('Attempting to start game. Tickets: ' . $this->tickets);
         if ($this->tickets < 10) {
-            session()->flash('error', 'Not enough tickets to play.');
+            session()->flash('message', 'Not enough tickets!');
+            Log::debug('Not enough tickets to start game.');
             return;
         }
 
         $this->tickets -= 10;
-        $this->gameActive = true;
-        $this->roundsPlayed = 0;
+        $this->gameStarted = true;
+        $this->currentRound = 1;
         $this->userScore = 0;
         $this->botScore = 0;
-        $this->winner = null;
-
-        $this->resetPlayerTower('user');
-        $this->resetPlayerTower('bot');
-        $this->activePlayer = 'user';
-        $this->dispatch('play-sound', sound: 'play');
+        $this->progress = [];
+        $this->gameWinner = null;
+        Log::debug('Game started. New ticket count: ' . $this->tickets);
+        $this->initializeRound();
     }
 
-    public function revealTile($index)
+    public function initializeRound()
     {
-        if (!$this->gameActive || $this->activePlayer !== 'user') return;
+        $this->userTower = $this->generateTower();
+        $this->botTower = $this->generateTower();
+        $this->userCurrentRow = 0;
+        $this->botCurrentRow = 0;
+        $this->firstPlayer = rand(0, 1) ? 'user' : 'bot';
+        $this->turn = $this->firstPlayer;
+        $this->playersTurnsTaken = [];
+        Log::debug('Round initialized. First player: ' . $this->firstPlayer);
 
-        // Only allow tiles from the current row to be revealed
-        $rowStart = $this->userCurrentRow * 2;
-        $rowEnd = $rowStart + 1;
-
-        // Ensure only current row tiles can be revealed
-        if ($index !== $rowStart && $index !== $rowEnd) return;
-
-        $this->processTurn($index, 'user');
-    }
-
-    public function botPlay()
-    {
-        if (!$this->gameActive || $this->activePlayer !== 'bot') return;
-
-        while ($this->botCurrentRow >= 0) {
-            $rowStart = $this->botCurrentRow * 2;
-            $rowEnd = $rowStart + 1;
-            $correctIndex = $this->botCorrectTiles[4 - $this->botCurrentRow];
-
-            // Bot selects the correct tile with 60% chance
-            $picked = rand(1, 100) <= 60 ? $correctIndex : ($correctIndex == $rowStart ? $rowEnd : $rowStart);
-            $this->processTurn($picked, 'bot');
-
-            // Break if the bot hits a wrong tile
-            if ($picked !== $correctIndex) break;
-        }
-
-        // End the round if bot makes a mistake
-        if ($this->roundsPlayed < 20) {
-            $this->roundsPlayed++;
-            $this->resetPlayerTower('user');
-            $this->activePlayer = 'user';
-        }
-
-        if ($this->roundsPlayed >= 20) {
-            $this->endGame();
+        if ($this->turn == 'bot') {
+            Log::debug('Bot turn initiated at round start.');
+            $this->handleBotTurn();
         }
     }
 
-    public function processTurn($index, $player)
+    private function generateTower()
     {
-        $row = $player === 'user' ? $this->userCurrentRow : $this->botCurrentRow;
-        $rowStart = $row * 2;
-        $rowEnd = $rowStart + 1;
-        $correctIndex = ($player === 'user' ? $this->userCorrectTiles : $this->botCorrectTiles)[4 - $row];
+        $tower = [];
+        for ($row = 0; $row < 5; $row++) {
+            $correctIndex = rand(0, 1);
+            $tower[$row] = [
+                0 => ['correct' => $correctIndex == 0, 'selected' => false],
+                1 => ['correct' => $correctIndex == 1, 'selected' => false],
+            ];
+        }
+        return $tower;
+    }
 
-        if ($index === $correctIndex) {
-            $this->{$player . 'Tiles'}[$rowStart] = 'ticket';
-            $this->{$player . 'Tiles'}[$rowEnd] = 'ticket';
-            $this->{$player . 'Revealed'}[] = $rowStart;
-            $this->{$player . 'Revealed'}[] = $rowEnd;
+    public function selectTicket($player, $row, $ticketIndex)
+    {
+        Log::debug('Selecting ticket for ' . $player . ' at row ' . $row . ', ticket ' . $ticketIndex);
+        if ($this->gameWinner || $this->turn != $player || $this->{$player . 'CurrentRow'} != $row) {
+            Log::debug('Selection invalid: gameWinner=' . ($this->gameWinner ? 'true' : 'false') . ', turn=' . $this->turn . ', currentRow=' . $this->{$player . 'CurrentRow'});
+            return;
+        }
 
-            $this->{$player . 'CurrentRow'}--;
-            $this->dispatch('play-sound', sound: 'correct');
+        $tower = $player . 'Tower';
+        $this->$tower[$row][$ticketIndex]['selected'] = true;
+        Log::debug('Ticket selected. Tower state: ' . json_encode($this->$tower));
 
-            if ($this->{$player . 'CurrentRow'} < 0) {
-                $this->{$player . 'Score'}++;
-                $this->roundsPlayed++;
-                $this->resetPlayerTower($player);
-                $this->resetPlayerTower($player === 'user' ? 'bot' : 'user');
-                $this->activePlayer = $player === 'user' ? 'bot' : 'user';
+        if ($this->$tower[$row][$ticketIndex]['correct']) {
+            $this->{$player . 'CurrentRow'}++;
+            Log::debug($player . ' correct selection. New row: ' . $this->{$player . 'CurrentRow'});
+            if ($this->{$player . 'CurrentRow'} == 5) {
+                $this->progress[$this->currentRound] = [
+                    'user' => $player == 'user' ? 5 : $this->userCurrentRow,
+                    'bot' => $player == 'bot' ? 5 : $this->botCurrentRow,
+                ];
+                $this->userScore += $this->progress[$this->currentRound]['user'];
+                $this->botScore += $this->progress[$this->currentRound]['bot'];
+                $this->gameWinner = $player;
+                Log::debug($player . ' wins the game!');
+                $this->dispatch('botMove', ['continue' => false]);
+                return;
+            }
+            if ($player == 'bot') {
+                Log::debug('Bot made a correct selection, dispatching botMove with continue=true');
+                $this->dispatch('botMove', ['continue' => true]);
             }
         } else {
-            $this->{$player . 'Tiles'}[$index] = 'empty';
-            $this->{$player . 'Revealed'}[] = $index;
-            $this->dispatch('play-sound', sound: 'wrong');
+            Log::debug($player . ' incorrect selection at row ' . $row);
+            $this->dispatch('botMove', ['continue' => false]);
+            $this->endTurn($player);
+        }
+    }
 
-            if ($player === 'user') {
-                $this->activePlayer = 'bot';
-                $this->botPlay();
+    private function botSelectTicket()
+    {
+        if ($this->gameWinner || $this->turn != 'bot') {
+            Log::debug('Bot cannot select: gameWinner=' . ($this->gameWinner ? 'true' : 'false') . ', turn=' . $this->turn);
+            return false;
+        }
+
+        $row = $this->botCurrentRow;
+        $knowsCorrect = rand(0, 99) < 20; // 20% chance to know correct
+        if ($knowsCorrect) {
+            $correctIndex = array_search(true, array_column($this->botTower[$row], 'correct'));
+            $ticketIndex = $correctIndex;
+        } else {
+            $ticketIndex = rand(0, 1);
+        }
+        Log::debug('Bot selecting ticket ' . $ticketIndex . ' at row ' . $row . ' (knowsCorrect: ' . ($knowsCorrect ? 'true' : 'false') . ')');
+
+        $this->selectTicket('bot', $row, $ticketIndex);
+        return $this->botCurrentRow < 5 && $this->botTower[$row][$ticketIndex]['correct'] && !$this->gameWinner;
+    }
+
+    public function handleBotTurn()
+    {
+        Log::debug('Bot turn triggered via botTurn event. Current row: ' . $this->botCurrentRow);
+        $this->botSelectTicket();
+    }
+
+    private function endTurn($player)
+    {
+        Log::debug($player . ' turn ended. Players turns taken: ' . count($this->playersTurnsTaken));
+        $this->playersTurnsTaken[] = $player;
+        if (count($this->playersTurnsTaken) == 2) {
+            Log::debug('Both players have taken turns. Ending round ' . $this->currentRound);
+            $this->endRound();
+        } else {
+            $nextPlayer = $player == 'user' ? 'bot' : 'user';
+            $this->turn = $nextPlayer;
+            Log::debug('Switching turn to ' . $nextPlayer);
+            if ($nextPlayer == 'bot') {
+                $this->handleBotTurn();
             }
         }
     }
 
-    private function resetPlayerTower($player)
+    private function endRound()
     {
-        $this->{$player . 'Tiles'} = array_fill(0, 10, 'hidden');
-        $this->{$player . 'Revealed'} = [];
-        $this->{$player . 'CurrentRow'} = 4;
-        $this->{$player . 'CorrectTiles'} = [];
+        $this->progress[$this->currentRound] = [
+            'user' => $this->userCurrentRow,
+            'bot' => $this->botCurrentRow,
+        ];
+        $this->userScore += $this->userCurrentRow;
+        $this->botScore += $this->botCurrentRow;
+        Log::debug('Round ' . $this->currentRound . ' ended. Scores - User: ' . $this->userScore . ', Bot: ' . $this->botScore);
 
-        for ($i = 4; $i >= 0; $i--) {
-            $this->{$player . 'CorrectTiles'}[] = rand($i * 2, $i * 2 + 1);
+        if ($this->currentRound == 20) {
+            if ($this->userScore > $this->botScore) {
+                $this->gameWinner = 'user';
+            } elseif ($this->botScore > $this->userScore) {
+                $this->gameWinner = 'bot';
+            } else {
+                $this->gameWinner = 'tie';
+            }
+            Log::debug('Game ended after 20 rounds. Winner: ' . ($this->gameWinner ?: 'None (Tie)'));
+        } else {
+            $this->currentRound++;
+            Log::debug('Advancing to round ' . $this->currentRound);
+            $this->initializeRound();
         }
-    }
-
-    private function endGame()
-    {
-        $this->gameActive = false;
-        $this->winner = $this->userScore > $this->botScore ? 'user' : ($this->botScore > $this->userScore ? 'bot' : 'draw');
-        $msg = $this->winner === 'draw' ? "It's a draw!" : strtoupper($this->winner) . ' wins by score!';
-        session()->flash('info', $msg);
     }
 
     public function render()
