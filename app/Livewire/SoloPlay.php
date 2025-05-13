@@ -31,10 +31,10 @@ class SoloPlay extends Component
         $this->currentRow = 4;
 
         // Randomly assign one correct tile in each row
-        $this->correctTiles = [];
-        for ($i = 4; $i >= 0; $i--) {
-            $this->correctTiles[] = rand($i * 2, $i * 2 + 1);
-        }
+        // $this->correctTiles = [];
+        // for ($i = 4; $i >= 0; $i--) {
+        //     $this->correctTiles[] = rand($i * 2, $i * 2 + 1);
+        // }
 
         // Set the initial view data
         $this->updateViewData();
@@ -49,7 +49,6 @@ class SoloPlay extends Component
             return;
         }
 
-        // Check if the tile is in the current row
         $rowStart = $this->currentRow * 2;
         $rowEnd = $rowStart + 1;
         if ($index < $rowStart || $index > $rowEnd) {
@@ -57,7 +56,6 @@ class SoloPlay extends Component
             return;
         }
 
-        // Deduct a ticket only at the start of the game
         if ($this->currentRow == 4) {
             if ($this->tickets <= 0) {
                 session()->flash('error', 'No tickets left. Reload to play again.');
@@ -66,38 +64,32 @@ class SoloPlay extends Component
             $this->tickets--;
         }
 
-        // Check if the selected tile is correct
-        if ($index === $this->correctTiles[4 - $this->currentRow]) {
-            // Correct choice, reveal the entire row
+        $isWin = mt_rand(1, 100) <= 40;
+        if ($isWin) {
             $this->tiles[$rowStart] = 'ticket';
             $this->tiles[$rowEnd] = 'ticket';
             $this->revealedTiles[] = $rowStart;
             $this->revealedTiles[] = $rowEnd;
 
-            // Move up to the next row
             $this->currentRow--;
 
             $this->dispatch('play-sound', sound: 'correct');
-            // Check if the player has completed the tower
             if ($this->currentRow < 0) {
                 session()->flash('success', '🎉 You built the tower! Play again to win more!');
                 $this->gameActive = false;
             }
         } else {
-            // Wrong choice, reset the game
             $this->tiles[$index] = 'empty';
             $this->gameActive = false;
             session()->flash('error', '💥 Wrong tile! Game over. Try again.');
             $this->dispatch('play-sound', sound: 'wrong');
         }
 
-        // Update the view data after each reveal
         $this->updateViewData();
     }
 
     public function updateViewData()
     {
-        // Set the data to be passed to the view
         $this->viewData = [
             'tiles' => $this->tiles,
             'tickets' => $this->tickets,
