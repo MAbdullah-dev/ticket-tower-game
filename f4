@@ -164,36 +164,7 @@ body {
     border: 1px solid rgba(255, 255, 255, 0.3);
 }
 
-.battlefield-game .grid-wrapper {
-    max-width: 80%;
-    width: 100%;
-    margin: 0 auto;
-}
-
-.battlefield-game .tower-footer img {
-    height: 40px;
-    width: 40px;
-}
-
-.battlefield-game .tower-footer p {
-    margin: 0;
-
-    i {
-        rotate: -40deg;
-    }
-}
-
-.battlefield-game .tower-footer .footer-btn {
-    border: 2px solid #7100BD;
-    background: transparent;
-    border-radius: 10px;
-    color: #7100BD;
-    font-weight: bold;
-    padding: 15px;
-    text-align: center;
-    margin: 15px 0;
-    font-size: 1.2rem;
-    letter-spacing: 1px;
-    cursor: pointer;
-    box-shadow: 0 0 1px #7100BD, 0 0 10px #7100BD, 0 0 0px #7100BD, 0 0 5px #7100BD;
+.tower-border {
+    border: 1px solid;
+    padding: 25px;
 }
